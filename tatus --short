@@ -1,0 +1,13 @@
+warning: in the working copy of 'routes/web.php', CRLF will be replaced by LF the next time Git touches it
+ AGENTS.md                                          |  145 [32m+[m[31m-[m
+ app/Models/User.php                                |   95 [32m+[m[31m-[m
+ composer.json                                      |   14 [32m+[m[31m-[m
+ composer.lock                                      | 2559 [32m++++++++++++++++[m[31m----[m
+ database/factories/UserFactory.php                 |   13 [32m+[m[31m-[m
+ .../0001_01_01_000000_create_users_table.php       |    1 [32m+[m
+ database/seeders/DatabaseSeeder.php                |    8 [32m+[m[31m-[m
+ phpunit.xml                                        |    1 [32m+[m
+ routes/web.php                                     |   39 [32m+[m[31m-[m
+ tests/Feature/ExampleTest.php                      |   53 [32m+[m[31m-[m
+ tests/Unit/ExampleTest.php                         |   17 [32m+[m[31m-[m
+ 11 files changed, 2421 insertions(+), 524 deletions(-)

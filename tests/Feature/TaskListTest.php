@@ -126,20 +126,26 @@ test('deleting task list deletes memberships', function () {
     }
 });
 
-test('transaction rollback works when failure occurs', function () {
+test('transaction rollback works when deletion fails and leaves no orphan records', function () {
     $owner = User::factory()->create();
     $member = User::factory()->create();
 
     $taskList = TaskList::create([
         'user_id' => $owner->id,
-        'name' => 'Critical List',
+        'name' => 'Critical List for Deletion Rollback',
         'description' => 'Must not be partially deleted',
     ]);
 
-    $task = Task::factory()->create([
+    $task1 = Task::factory()->create([
         'task_list_id' => $taskList->id,
         'created_by' => $owner->id,
-        'title' => 'Critical Task',
+        'title' => 'Critical Task One',
+    ]);
+
+    $task2 = Task::factory()->create([
+        'task_list_id' => $taskList->id,
+        'created_by' => $owner->id,
+        'title' => 'Critical Task Two',
     ]);
 
     if (Schema::hasTable('task_list_user')) {
@@ -147,30 +153,53 @@ test('transaction rollback works when failure occurs', function () {
     }
 
     // Simulate an error on the last step of the transaction (TaskList deletion)
-    TaskList::deleting(function () {
-        throw new RuntimeException('Simulated failure during task list deletion');
+    TaskList::deleting(function ($model) {
+        if ($model->name === 'Critical List for Deletion Rollback') {
+            throw new RuntimeException('Simulated failure during task list deletion');
+        }
     });
 
-    try {
-        $this->withoutExceptionHandling()
-            ->actingAs($owner)
-            ->delete("/task-lists/{$taskList->id}");
-    } catch (RuntimeException $e) {
-        expect($e->getMessage())->toBe('Simulated failure during task list deletion');
-    }
+    $response = $this->actingAs($owner)->delete("/task-lists/{$taskList->id}");
 
-    // Assert that the transaction was rolled back completely:
-    // TaskList still exists
+    $response->assertRedirect(route('task-lists.index'));
+    $response->assertSessionHas('error');
+
+    // Assert that the transaction was rolled back completely (no orphan records):
+    // 1. TaskList still exists
     $this->assertDatabaseHas('task_lists', ['id' => $taskList->id]);
-    // Related task still exists (not orphaned or deleted)
-    $this->assertDatabaseHas('tasks', ['id' => $task->id]);
-    // Collaboration membership still exists
+    // 2. Related tasks still exist (not orphaned or deleted)
+    $this->assertDatabaseHas('tasks', ['id' => $task1->id]);
+    $this->assertDatabaseHas('tasks', ['id' => $task2->id]);
+    // 3. Collaboration membership still exists
     if (Schema::hasTable('task_list_user')) {
         $this->assertDatabaseHas('task_list_user', [
             'task_list_id' => $taskList->id,
             'user_id' => $member->id,
         ]);
     }
+});
+
+test('transaction rollback works when creation fails', function () {
+    $user = User::factory()->create();
+
+    // Simulate a failure during creation save
+    TaskList::saving(function ($model) {
+        if ($model->name === 'Rollback Creation Test') {
+            throw new RuntimeException('Simulated failure during task list creation');
+        }
+    });
+
+    $response = $this->actingAs($user)->post('/task-lists', [
+        'name' => 'Rollback Creation Test',
+        'description' => 'Should fail and rollback',
+    ]);
+
+    $response->assertSessionHasErrors(['error']);
+
+    // Assert that the transaction was rolled back completely
+    $this->assertDatabaseMissing('task_lists', [
+        'name' => 'Rollback Creation Test',
+    ]);
 });
 
 test('invalid input is rejected', function () {

@@ -66,20 +66,31 @@ class TaskListController extends Controller
 
     /**
      * Store a newly created task list in storage.
-     * Automatically assigns the authenticated user as the owner.
+     * Automatically assigns the authenticated user as the owner inside an atomic transaction.
      */
     public function store(TaskListStoreRequest $request): RedirectResponse
     {
-        $taskList = DB::transaction(function () use ($request) {
-            return TaskList::create([
-                'user_id' => Auth::id(),
-                'name' => $request->validated('name'),
-                'description' => $request->validated('description'),
-            ]);
-        });
+        try {
+            $taskList = DB::transaction(function () use ($request) {
+                $ownerId = Auth::id();
+                if (! $ownerId) {
+                    throw new \RuntimeException('Authenticated user is required to assign ownership.');
+                }
 
-        return redirect()->route('task-lists.index')
-            ->with('success', 'Task list "'.$taskList->name.'" created successfully!');
+                $taskList = new TaskList;
+                $taskList->name = $request->validated('name');
+                $taskList->description = $request->validated('description');
+                $taskList->user_id = $ownerId;
+                $taskList->save();
+
+                return $taskList;
+            });
+
+            return redirect()->route('task-lists.index')
+                ->with('success', 'Task list "'.$taskList->name.'" created successfully!');
+        } catch (\Throwable $e) {
+            return back()->withInput()->withErrors(['error' => 'Gagal membuat daftar tugas: '.$e->getMessage()]);
+        }
     }
 
     /**
@@ -188,21 +199,26 @@ class TaskListController extends Controller
 
         $name = $taskList->name;
 
-        // Atomic multi-step deletion
-        DB::transaction(function () use ($taskList) {
-            // Step 1: Delete all related tasks
-            $taskList->tasks()->delete();
+        try {
+            // Atomic multi-step deletion inside ONE transaction
+            DB::transaction(function () use ($taskList) {
+                // Step 1: Delete all related tasks
+                $taskList->tasks()->delete();
 
-            // Step 2: Delete all collaboration / membership records
-            if (Schema::hasTable('task_list_user')) {
-                $taskList->members()->detach();
-            }
+                // Step 2: Delete all collaboration / membership records
+                if (Schema::hasTable('task_list_user')) {
+                    $taskList->members()->detach();
+                }
 
-            // Step 3: Delete the task list itself
-            $taskList->delete();
-        });
+                // Step 3: Delete the task list itself
+                $taskList->delete();
+            });
 
-        return redirect()->route('task-lists.index')
-            ->with('success', 'Task list "'.$name.'" and all its contents were permanently deleted.');
+            return redirect()->route('task-lists.index')
+                ->with('success', 'Task list "'.$name.'" and all its contents were permanently deleted.');
+        } catch (\Throwable $e) {
+            return redirect()->route('task-lists.index')
+                ->with('error', 'Gagal menghapus daftar tugas: '.$e->getMessage());
+        }
     }
 }

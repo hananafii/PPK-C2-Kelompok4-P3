@@ -1,19 +1,38 @@
 <?php
 
-namespace Tests\Feature;
+use App\Models\User;
 
-// use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\TestCase;
+test('the application returns a successful response', function () {
+    $response = $this->get('/');
 
-class ExampleTest extends TestCase
-{
-    /**
-     * A basic test example.
-     */
-    public function test_the_application_returns_a_successful_response(): void
-    {
-        $response = $this->get('/');
+    $response->assertStatus(200);
+});
 
-        $response->assertStatus(200);
-    }
-}
+test('login page can be rendered without errors', function () {
+    $response = $this->get(route('login'));
+
+    $response->assertOk();
+    $response->assertSee('Login JARA');
+});
+
+test('register page can be rendered without errors', function () {
+    $response = $this->get(route('register'));
+
+    $response->assertOk();
+    $response->assertSee('Register JARA');
+});
+
+test('a user can authenticate via login form', function () {
+    $user = User::factory()->create([
+        'email' => 'lintang@example.com',
+        'password' => bcrypt('password123'),
+    ]);
+
+    $response = $this->post(route('login'), [
+        'email' => 'lintang@example.com',
+        'password' => 'password123',
+    ]);
+
+    $response->assertRedirect(route('lists.index'));
+    $this->assertAuthenticatedAs($user);
+});

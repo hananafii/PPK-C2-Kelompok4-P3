@@ -1,0 +1,9 @@
+@extends('layouts.app')
+@section('content')
+<h1>{{ $project->name }}</h1>
+<p>Progress: {{ $completedTasks }}/{{ $totalTasks }} tugas selesai ({{ $progress }}%)</p>
+<h2>Tugas</h2><ul>@forelse($project->tasks as $task)<li><strong>{{ $task->title }}</strong> — {{ $task->priority }} — deadline: {{ $task->deadline ?? '-' }} — {{ $task->status }}<br>{{ $task->description }}<form style="display:inline" method="POST" action="{{ route('tasks.toggle',[$project,$task]) }}">@csrf @method('PATCH')<button>{{ $task->status === 'completed' ? 'Tandai Belum Selesai' : 'Tandai Selesai' }}</button></form></li>@empty<li>Belum ada tugas.</li>@endforelse</ul>
+<h3>Tambah Tugas</h3><form method="POST" action="{{ route('lists.tasks.store',$project) }}">@csrf <p>Nama <input name="title" required></p><p>Deskripsi <textarea name="description"></textarea></p><p>Prioritas <select name="priority"><option value="low">Rendah</option><option value="medium" selected>Sedang</option><option value="high">Tinggi</option></select></p><p>Deadline <input type="date" name="deadline"></p><button>Tambah Tugas</button></form>
+<h2>Anggota</h2><ul>@forelse($project->members as $member)<li>{{ $member->name }} @if($project->owner_id === auth()->id() && $member->id !== auth()->id())<form style="display:inline" method="POST" action="{{ route('lists.members.destroy',[$project,$member]) }}">@csrf @method('DELETE')<button>Hapus</button></form>@endif</li>@empty<li>Belum ada anggota.</li>@endforelse</ul>
+@if($project->owner_id === auth()->id())<h3>Tambah Anggota</h3><form method="POST" action="{{ route('lists.members.store',$project) }}">@csrf <select name="user_id" required><option value="">Pilih pengguna</option>@foreach($availableUsers as $user)<option value="{{ $user->id }}">{{ $user->name }} ({{ $user->email }})</option>@endforeach</select><button>Tambah</button></form>@endif
+@endsection
